@@ -2,7 +2,15 @@ import numpy as np
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import OneHotEncoder
 from network import TwoLayerNet
-from optimizer import SGD
+from optimizer import SGD, Adam
+
+# ======================================================================
+# لوحة التحكم بالتجربة (Experiment Control Panel)
+# ======================================================================
+optimizer_choice = 'sgd'  # 'sgd' or 'adam'
+use_he_initialization = False  # True or False
+weight_decay_lambda = 0  # 0 for no decay, 1e-4 for small decay)
+# ======================================================================
 
 # 1. تحميل ومعالجة البيانات (MNIST)
 print("Loading dataset...")
@@ -34,8 +42,17 @@ batch_size = 100        # حجم الدفعة الصغيرة في كل مرة ت
 learning_rate = 0.1     # معدل التعلم
 
 # 3. تهيئة الشبكة والمحسن
-network = TwoLayerNet(input_size=784, hidden_size=50, output_size=10)
-optimizer = SGD(lr=learning_rate)
+print("Initializing network with the following settings:")
+print(f"Optimizer: {optimizer_choice}, He Init: {use_he_initialization}, L2 Lambda: {weight_decay_lambda}")
+
+network = TwoLayerNet(input_size=784, hidden_size=50, output_size=10,
+                      weight_init_type='he' if use_he_initialization else 'std',
+                      weight_decay_lambda=weight_decay_lambda)
+
+if optimizer_choice.lower() == 'adam':
+    optimizer = Adam(lr=0.001) # Adam يعمل أفضل مع معدل تعلم أصغر
+else:
+    optimizer = SGD(lr=0.1)
 
 print("Starting training...")
 

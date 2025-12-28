@@ -7,7 +7,7 @@ class TwoLayerNet:
     # A simple two-layer neural network.
     # Architecture: Affine -> ReLU -> Affine -> Softmax
     
-    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01):
+    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01, weight_init_type='std', weight_decay_lambda=0):
     
         # Initializes the network.
         # input_size: حجم المدخلات (مثلاً 784 لصورة 28x28)
@@ -31,6 +31,8 @@ class TwoLayerNet:
         
         # الطبقة الأخيرة منفصلة لأنها تتعامل مع حساب الخسارة
         self.lastLayer = SoftmaxWithLoss()
+         # تخزين معامل weight decay
+        self.weight_decay_lambda = weight_decay_lambda
         
     def predict(self, x):
     
@@ -50,8 +52,13 @@ class TwoLayerNet:
         
         # نقوم أولاً بالتنبؤ
         y = self.predict(x)
-        # ثم نحسب الخسارة باستخدام الطبقة الأخيرة
-        return self.lastLayer.forward(y, t)
+        # حساب عقوبة الأوزان (L2 norm)
+        weight_decay = 0
+        weight_decay += 0.5 * self.weight_decay_lambda * np.sum(self.params['W1'] ** 2)
+        weight_decay += 0.5 * self.weight_decay_lambda * np.sum(self.params['W2'] ** 2)
+
+        # ثم نحسب الخسارة باستخدام الطبقة الأخيرة مع إضافة العقوبة
+        return self.lastLayer.forward(y, t) + weight_decay
 
     def accuracy(self, x, t):
         
@@ -85,11 +92,12 @@ class TwoLayerNet:
         for layer in layers:
             dout = layer.backward(dout)
 
-        # 3. تجميع التدرجات المحسوبة من طبقات Affine
+         # 3. تجميع التدرجات وإضافة تدرج عقوبة L2
         grads = {}
-        grads['W1'] = self.layers['Affine1'].dW
+        # نضيف تدرج العقوبة (lambda * W) إلى تدرج الوزن المحسوب
+        grads['W1'] = self.layers['Affine1'].dW + self.weight_decay_lambda * self.params['W1']
         grads['b1'] = self.layers['Affine1'].db
-        grads['W2'] = self.layers['Affine2'].dW
+        grads['W2'] = self.layers['Affine2'].dW + self.weight_decay_lambda * self.params['W2']
         grads['b2'] = self.layers['Affine2'].db
-        
+
         return grads
