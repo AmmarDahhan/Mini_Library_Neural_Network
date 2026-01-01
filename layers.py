@@ -1,165 +1,98 @@
 import numpy as np
 
+# Helper Func.
+
+def softmax(input_data):
+    stabilized_data = input_data - np.max(input_data,axis=1, keepdims=True)
+    exponentails = np.exp(stabilized_data)
+
+    return exponentails / np.sum(exponentails,axis=-1,keepdims=True) 
+
+
+def cross_entropy_error(predicted_probs,true_labels):
+    if predicted_probs.ndim == 1:
+        predicted_probs = predicted_probs.reshape(1,predicted_probs.size)
+        true_labels = true_labels.reshape(1,true_labels.size)
+
+    if true_labels.ndim== 2:
+        true_labels = true_labels.argmax(axis=1)
+    batch_size = predicted_probs.shape[0]
+    correct_log_probs = np.log(predicted_probs[np.arange(batch_size),true_labels]+ 1e-7)
+    loos = -np.sum(correct_log_probs)/batch_size
+
+    return loos
+
+# Layers
+
 class Relu:
-    
-    # ReLU Layer.
-    
     def __init__(self):
-        # قناع لتخزين الأماكن التي كانت فيها قيمة المدخلات أقل من أو تساوي صفر
-        self.mask = None
+        self.zero_mask = None
 
-    def forward(self, x):
-        
-        # Forward pass.
-        # x: المدخلات (يمكن أن تكون أي مصفوفة numpy)
-        
-        # القناع سيكون True في الأماكن التي x <= 0, و False في غير ذلك
-        self.mask = (x <= 0)
-        out = x.copy()  # ننشئ نسخة لتجنب تغيير المدخلات الأصلية
-        out[self.mask] = 0  # تصفير القيم غير النشطة
-        return out
+    def forward(self,input_data):
+        self.zero_mask = (input_data <=0)
+        output_data = input_data.copy()
+        output_data[self.zero_mask]= 0
 
-    def backward(self, dout):
-        
-        # Backward pass.
-        # dout: التدرج القادم من الطبقة التالية
-        
-        # خلال الانتشار العكسي، التدرج يمر فقط عبر العصبونات التي كانت "نشطة"
-        # لذلك، نقوم بتصفير تدرج العصبونات التي كانت "خاملة"
-        dout[self.mask] = 0
-        dx = dout
-        return dx
+        return output_data
+    
+    def backward(self,grad_from_next_layer):
+        grad_from_next_layer[self.zero_mask]= 0
+        grad_for_prev_layer= grad_from_next_layer
 
+        return grad_for_prev_layer
+    
 class Sigmoid:
-    
-    # Sigmoid Layer.
-    
     def __init__(self):
-        # سنقوم بتخزين المخرجات (self.out) لأننا نحتاجها في حساب الانتشار العكسي
-        self.out = None
+        self.output= None
 
-    def forward(self, x):
+    def forward(self,input_data):
+        result= 1 /(1+ np.exp(-input_data))
+        self.output = result
+        return result
     
-        # Forward pass.
+    def backward(self, grad_from_next_layer):
+        grade_for_prev_layer= grad_from_next_layer * (1.0 - self.output) * self.output
+        return grade_for_prev_layer
     
-        out = 1 / (1 + np.exp(-x))
-        self.out = out
-        return out
-
-    def backward(self, dout):
-    
-        # Backward pass.
-        # مشتقة دالة Sigmoid هي out * (1 - out)
-    
-        # نطبق قاعدة السلسلة: نضرب التدرج القادم (dout) بمشتقة الدالة المحلية
-        dx = dout * (1.0 - self.out) * self.out
-        return dx
-
 class Affine:
-    
-    # Affine (Fully Connected) Layer.
-    
-    def __init__(self, W, b):
-        # W: مصفوفة الأوزان, b: متجه الانحياز
-        self.W = W
-        self.b = b
-        
-        # سنحفظ المدخلات (x) لحساب الانتشار العكسي
-        self.x = None
-        # سنحفظ شكل المدخلات الأصلي في حال كانت صورة وتحتاج لإعادة تشكيل
-        self.original_x_shape = None
-        
-        # هذه المتغيرات ستحتوي على تدرج الأوزان والانحياز بعد الحساب
-        self.dW = None
-        self.db = None
+    def __init__(self,weights,bias):
+        self.W= weights
+        self.b= bias
 
-    def forward(self, x):
-    
-        # Forward pass.
-    
-        # إذا كانت المدخلات عبارة عن بيانات صور (مثلاً 100 صورة بحجم 28*28)
-        # سيتم تحويلها إلى مصفوفة ثنائية الأبعاد (100, 784)
-        self.original_x_shape = x.shape
-        self.x = x.reshape(x.shape[0], -1)
-        
-        # تنفيذ العملية الرئيسية: Y = X • W + b
-        out = np.dot(self.x, self.W) + self.b
-        
-        return out
+        self.input_data = None
+        self.grad_w= None
+        self.grad_b= None
 
-    def backward(self, dout):
+    def forward(self,input_data):
+        self.input_data= input_data
+        result = np.dot(input_data,self.W) +self.b
+        
+        return result
     
-        # Backward pass.
-        # dout: التدرج القادم من الطبقة التالية
-    
-        # 1. حساب التدرج بالنسبة للمدخلات (dx)، ليتم تمريره للطبقة السابقة
-        dx = np.dot(dout, self.W.T)
-        
-        # 2. حساب التدرج بالنسبة للأوزان (dW)
-        self.dW = np.dot(self.x.T, dout)
-        
-        # 3. حساب التدرج بالنسبة للانحياز (db)
-        # الانحياز يطبق على كل عينة في الدفعة (batch), لذا تدرجه هو مجموع تدرجات الدفعة
-        self.db = np.sum(dout, axis=0)
-        
-        # إعادة تشكيل dx ليطابق شكل المدخلات الأصلي قبل تمريره للخلف
-        dx = dx.reshape(self.original_x_shape)
-        return dx
+    def backward(self,grad_from_next_layer):
+        grad_for_prev_layer= np.dot(grad_from_next_layer,self.W.T)
+        self.grad_w = np.dot(self.input_data.T,grad_from_next_layer)
+        self.grad_b= np.sum(grad_from_next_layer,axis=0)
 
-def softmax(x):
-    # خدعة لضمان الاستقرار الرقمي ومنع القيم الكبيرة جداً
-    # نطرح أكبر قيمة من كل القيم لمنع حدوث overflow عند حساب الأس
-    x = x - np.max(x, axis=-1, keepdims=True)   
-    return np.exp(x) / np.sum(np.exp(x), axis=-1, keepdims=True)
-
-def cross_entropy_error(y, t):
-    # y هي مخرجات الشبكة (الاحتمالات)
-    # t هي الإجابات الصحيحة (one-hot encoded)
+        return grad_for_prev_layer
     
-    # إذا كانت y عبارة عن دفعة من البيانات، نحسب الخطأ لكل عينة ثم نجمع
-    if y.ndim == 1:
-        t = t.reshape(1, t.size)
-        y = y.reshape(1, y.size)
-        
-    # إذا لم تكن الإجابات الصحيحة one-hot, نحولها
-    if t.size == y.size:
-        t = t.argmax(axis=1)
-             
-    batch_size = y.shape[0]
-    # نضيف قيمة صغيرة جداً (1e-7) لتجنب حساب لوغاريتم الصفر (log(0))
-    return -np.sum(np.log(y[np.arange(batch_size), t] + 1e-7)) / batch_size
-
-class SoftmaxWithLoss:
-    
-    # Softmax with Cross Entropy Error Loss Layer.
-    
+class SoftMaxWithLoss:
     def __init__(self):
-        self.loss = None # سيخزن قيمة الخطأ
-        self.y = None    # سيخزن مخرجات الـ softmax (الاحتمالات)
-        self.t = None    # سيخزن الإجابات الصحيحة (labels)
-
-    def forward(self, x, t):
+        self.loss = None
+        self.predicted_probs= None
+        self.true_labels  = None
     
-        # Forward pass.
-        # x: المدخلات من الطبقة الأخيرة (Affine)
-        # t: الإجابات الصحيحة
+    def forward(self,input_data,true_labels):
+        self.true_labels= true_labels
+        self.predicted_probs= softmax(input_data)
+        self.loss= cross_entropy_error(self.predicted_probs,self.true_labels)
 
-        self.t = t
-        self.y = softmax(x)
-        self.loss = cross_entropy_error(self.y, self.t)
-        
         return self.loss
+    
+    def backward(self,dout= 1):
+        batch_size= self.true_labels.shape[0]
+        grad_for_prev_layer= (self.predicted_probs - self.true_labels)/ batch_size
 
-    def backward(self, dout=1):
-
-        # Backward pass.
-        # dout: عادة ما يكون 1، لأن هذه هي الطبقة التي يبدأ منها حساب التدرج
-
-        batch_size = self.t.shape[0]
-        # هذا هو الاختصار الرياضي السحري!
-        # التدرج الذي يجب تمريره للخلف هو ببساطة (الناتج المتوقع - الناتج الحقيقي)
-        dx = (self.y - self.t) / batch_size
-        
-        return dx
-
-
+        return grad_for_prev_layer
+    
+    

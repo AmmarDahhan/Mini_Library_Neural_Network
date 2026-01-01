@@ -1,0 +1,545 @@
+====================================================================================================
+PROJECT EXPORT FOR LLMs
+====================================================================================================
+
+PROJECT INFORMATION:
+--------------------------------------------------
+Project Name: HW_Mini_Library_Neural_Network
+Generated On: 2026-01-01 20:53:10 (Asia/Damascus / GMT+03:00)
+Total Files Processed: 8
+Export Tool: Easy Whole Project to Single Text File for LLMs v1.1.0
+Tool Author: Jota / José Guilherme Pandolfi
+
+EXPORT CONFIGURATION:
+--------------------------------------------------
+Language: en
+Max File Size: 1 MB
+Include Hidden Files: false
+Output Format: both
+Notification Level: minimal
+Custom File Name Pattern: {workspaceName}-output
+
+================================================================================
+PROJECT STRUCTURE
+================================================================================
+├── 📁 __pycache__/
+│   ├── 📄 layers.cpython-312.pyc (5.04 KB)
+│   ├── 📄 network.cpython-312.pyc (4.92 KB)
+│   └── 📄 optimizer.cpython-312.pyc (2.76 KB)
+├── 📄 layers.py (2.82 KB)
+├── 📄 network.py (3.03 KB)
+├── 📄 optimizer.py (1.34 KB)
+├── 📄 README.md (5.68 KB)
+└── 📄 train.py (2.36 KB)
+
+================================================================================
+PROJECT STATISTICS
+================================================================================
+Total Files: 8
+Total Directories: 1
+Text Files: 5
+Binary Files: 3
+Total Size: 27.95 KB
+
+FILE TYPES DISTRIBUTION:
+------------------------------
+.py             : 4
+.pyc            : 3
+.md             : 1
+
+================================================================================
+FILE CODE CONTENTS
+================================================================================
+
+
+================================================================================
+BINARY/EXCLUDED FILES (not included in text content)
+================================================================================
+- __pycache__/layers.cpython-312.pyc
+- __pycache__/network.cpython-312.pyc
+- __pycache__/optimizer.cpython-312.pyc
+
+
+================================================================================
+FILE: layers.py
+================================================================================
+
+FILE INFORMATION:
+----------------------------------------
+Size: 2.82 KB
+Extension: .py
+Language: python
+Location: layers.py
+Relative Path: root
+Created: 2025-12-27 18:20:49 (Asia/Damascus / GMT+03:00)
+Modified: 2026-01-01 20:34:28 (Asia/Damascus / GMT+03:00)
+MD5: 3407f2dd239767b74d8511f868cc534c
+SHA256: 354c304efdf98f8e28d1ac9e5431b0d1675c5eb6ce36d23a99346597d228252e
+Encoding: ASCII
+
+FILE CONTENT:
+----------------------------------------
+import numpy as np
+
+# Helper Func.
+
+def softmax(input_data):
+    stabilized_data = input_data - np.max(input_data,axis=1, keepdims=True)
+    exponentails = np.exp(stabilized_data)
+
+    return exponentails / np.sum(exponentails,axis=-1,keepdims=True) 
+
+
+def cross_entropy_error(predicted_probs,true_labels):
+    if predicted_probs.ndim == 1:
+        predicted_probs = predicted_probs.reshape(1,predicted_probs.size)
+        true_labels = true_labels.reshape(1,true_labels.size)
+
+    if true_labels.ndim== 2:
+        true_labels = true_labels.argmax(axis=1)
+    batch_size = predicted_probs.shape[0]
+    correct_log_probs = np.log(predicted_probs[np.arange(batch_size),true_labels]+ 1e-7)
+    loos = -np.sum(correct_log_probs)/batch_size
+
+    return loos
+
+# Layers
+
+class Relu:
+    def __init__(self):
+        self.zero_mask = None
+
+    def forward(self,input_data):
+        self.zero_mask = (input_data <=0)
+        output_data = input_data.copy()
+        output_data[self.zero_mask]= 0
+
+        return output_data
+    
+    def backward(self,grad_from_next_layer):
+        grad_from_next_layer[self.zero_mask]= 0
+        grad_for_prev_layer= grad_from_next_layer
+
+        return grad_for_prev_layer
+    
+class Sigmoid:
+    def __init__(self):
+        self.output= None
+
+    def forward(self,input_data):
+        result= 1 /(1+ np.exp(-input_data))
+        self.output = result
+        return result
+    
+    def backward(self, grad_from_next_layer):
+        grade_for_prev_layer= grad_from_next_layer * (1.0 - self.output) * self.output
+        return grade_for_prev_layer
+    
+class Affine:
+    def __init__(self,weights,bias):
+        self.W= weights
+        self.b= bias
+
+        self.input_data = None
+        self.grad_w= None
+        self.grad_b= None
+
+    def forward(self,input_data):
+        self.input_data= input_data
+        result = np.dot(input_data,self.W) +self.b
+        
+        return result
+    
+    def backward(self,grad_from_next_layer):
+        grad_for_prev_layer= np.dot(grad_from_next_layer,self.W.T)
+        self.grad_w = np.dot(self.input_data.T,grad_from_next_layer)
+        self.grad_b= np.sum(grad_from_next_layer,axis=0)
+
+        return grad_for_prev_layer
+    
+class SoftMaxWithLoss:
+    def __init__(self):
+        self.loss = None
+        self.predicted_probs= None
+        self.true_labels  = None
+    
+    def forward(self,input_data,true_labels):
+        self.true_labels= true_labels
+        self.predicted_probs= softmax(input_data)
+        self.loss= cross_entropy_error(self.predicted_probs,self.true_labels)
+
+        return self.loss
+    
+    def backward(self,dout= 1):
+        batch_size= self.true_labels.shape[0]
+        grad_for_prev_layer= (self.predicted_probs - self.true_labels)/ batch_size
+
+        return grad_for_prev_layer
+    
+    
+
+================================================================================
+
+
+================================================================================
+FILE: network.py
+================================================================================
+
+FILE INFORMATION:
+----------------------------------------
+Size: 3.03 KB
+Extension: .py
+Language: python
+Location: network.py
+Relative Path: root
+Created: 2025-12-27 18:20:58 (Asia/Damascus / GMT+03:00)
+Modified: 2026-01-01 20:33:34 (Asia/Damascus / GMT+03:00)
+MD5: dea3876424825d84a4c63602e2a41a51
+SHA256: 5fab9eec94f220119b1bba20de90b9303224a957a803f8b9bb8e22993eb90b9b
+Encoding: ASCII
+
+FILE CONTENT:
+----------------------------------------
+import numpy as np
+from collections import OrderedDict
+from layers import Affine,Relu,SoftMaxWithLoss
+
+class TwoLayerNet:
+    def __init__(self,input_size,hidden_size,output_size,weight_init_type= 'std',l2_penalty= 0):
+        self.network_params = {}
+        init_type= weight_init_type.lower()
+
+        if init_type== 'he':
+            scale1= np.sqrt(2.0/ input_size)
+            scale2= np.sqrt(2.0/ hidden_size)
+        else:
+            scale1= 0.01
+            scale2= 0.01
+
+        self.network_params['W1']= scale1 * np.random.randn(input_size,hidden_size)
+        self.network_params['b1']= np.zeros(hidden_size)
+        self.network_params['W2']= scale2 * np.random.randn(hidden_size,output_size)
+        self.network_params['b2']= np.zeros(output_size)
+
+        self.layer_stack= OrderedDict()
+        self.layer_stack['Affine1']= Affine(self.network_params['W1'],self.network_params['b1'])
+        self.layer_stack['Relu1']= Relu()
+        self.layer_stack['Affine2']= Affine(self.network_params['W2'],self.network_params['b2'])
+
+        self.final_loss_layer= SoftMaxWithLoss()
+        self.l2_penalty_strength= l2_penalty
+
+    def predict(self,input_data):
+        current_data= input_data
+        for layer in self.layer_stack.values():
+            current_data= layer.forward(current_data)
+            
+        return current_data
+        
+    def calculate_loss(self,input_data,target_labels):
+        prediction_output = self.predict(input_data)
+        l2_penalty_value= 0
+
+        if self.l2_penalty_strength >0:
+            w1_penalty= 0.5 * self.l2_penalty_strength * np.sum(self.network_params['W1']**2)
+            w2_penalty= 0.5 * self.l2_penalty_strength * np.sum(self.network_params['W2']**2)
+            l2_penalty_value= w1_penalty+ w2_penalty
+
+        return self.final_loss_layer.forward(prediction_output,target_labels) + l2_penalty_value
+    
+    def calculate_accuracy(self,input_data,target_labels):
+        predicted_scores= self.predict(input_data)
+        predicted_classes= np.argmax(predicted_scores,axis=1)
+
+        if target_labels.ndim !=1:
+            target_labels =  np.argmax(target_labels,axis=1)
+
+        accuracy= np.sum(predicted_classes== target_labels)/ float(input_data.shape[0])
+
+        return accuracy
+    
+    def calculate_gradients(self,input_data,target_labels):
+        self.calculate_loss(input_data,target_labels)
+        current_grad= self.final_loss_layer.backward(1)
+        layers= list(self.layer_stack.values())
+        layers.reverse()
+
+        for layer in layers:
+            current_grad= layer.backward(current_grad)
+
+        final_gradients= {}
+        final_gradients['W1']= self.layer_stack['Affine1'].grad_w + self.l2_penalty_strength* self.network_params['W1']
+        final_gradients['b1']= self.layer_stack['Affine1'].grad_b
+        final_gradients['W2']= self.layer_stack['Affine2'].grad_w + self.l2_penalty_strength* self.network_params['W2']
+        final_gradients['b2']= self.layer_stack['Affine2'].grad_b
+
+        return final_gradients
+
+================================================================================
+
+
+================================================================================
+FILE: optimizer.py
+================================================================================
+
+FILE INFORMATION:
+----------------------------------------
+Size: 1.34 KB
+Extension: .py
+Language: python
+Location: optimizer.py
+Relative Path: root
+Created: 2025-12-27 18:21:05 (Asia/Damascus / GMT+03:00)
+Modified: 2026-01-01 20:36:22 (Asia/Damascus / GMT+03:00)
+MD5: 6fa0116de42c92a1f1e955b3f3fb1183
+SHA256: 80ddf008068abbe922f275d371de83f47917c9c5f2fc91c772aca9396621f203
+Encoding: ASCII
+
+FILE CONTENT:
+----------------------------------------
+import numpy as np 
+
+class SGD:
+    def __init__(self,learning_rate=0.01):
+        self.lr = learning_rate
+
+    def apply_updates(self,network_parameters,calculate_gradients):
+        for key in network_parameters.keys():
+            network_parameters[key]-= self.lr*calculate_gradients[key]
+
+class Adam:
+    def __init__(self,learning_rate=0.001,beta1=0.9,beta2=0.999):
+        self.lr= learning_rate
+        self.beta1= beta1
+        self.beta2= beta2
+        self.step= 0
+        self.m= None
+        self.v= None
+
+    def apply_updates(self,network_parameters,calculate_gradients):
+        if self.m is None:
+            self.m,self.v= {},{}
+            for key,val in network_parameters.items():
+                self.m[key]= np.zeros_like(val)
+                self.v[key]= np.zeros_like(val)
+
+        self.step+= 1
+
+        for key in network_parameters.keys():
+            grad= calculate_gradients[key]
+            self.m[key]= self.beta1*self.m[key] + (1- self.beta1)*grad
+            self.v[key]= self.beta2*self.v[key] + (1- self.beta2)*(grad**2)
+            m_corrected= self.m[key]/ (1- self.beta1**self.step)
+            v_corrected= self.v[key]/ (1- self.beta2**self.step)
+
+            update_value= self.lr*m_corrected/ (np.sqrt(v_corrected)+ 1e-7)
+            network_parameters[key]-= update_value
+            
+        
+================================================================================
+
+
+================================================================================
+FILE: README.md
+================================================================================
+
+FILE INFORMATION:
+----------------------------------------
+Size: 5.68 KB
+Extension: .md
+Language: text
+Location: README.md
+Relative Path: root
+Created: 2026-01-01 20:51:23 (Asia/Damascus / GMT+03:00)
+Modified: 2026-01-01 20:53:10 (Asia/Damascus / GMT+03:00)
+MD5: 660813d404e4399bcee748fd3657e1ee
+SHA256: bb206e99d3afda6327e236b90993624ee85483469dec59061ff181744bc6f071
+Encoding: UTF-8
+
+FILE CONTENT:
+----------------------------------------
+# بناء مكتبة شبكات عصبونية مصغرة من الصفر
+
+## مقدمة عن المشروع
+
+هذا المشروع هو تطبيقي لوظيفة جامعية تهدف إلى بناء مكتبة شبكات عصبونية صغيرة من الصفر بالاعتماد الكامل على مكتبة `NumPy`. الهدف الأساسي كان فهم الآليات الجوهرية للشبكات العصبونية، مثل الانتشار الأمامي والخلفي، عن طريق برمجتها يدوياً بدلاً من استخدام أطر عمل جاهزة مثل PyTorch أو TensorFlow.
+
+---
+
+## المفاهيم الأساسية التي تم تطبيقها
+
+- **الطبقات (Layers):** قمت ببناء الطبقات الأساسية:
+  - `Affine`: الطبقة متصلة بالكامل (Fully Connected).
+  - `ReLU`: دالة التنشيط.
+  - `SoftmaxWithLoss`: طبقة مدمجة للناتج النهائي وحساب الخطأ.
+- **الانتشار الأمامي (Forward Propagation):** تمرير البيانات عبر الشبكة لتوليد التنبؤات.
+- **الانتشار الخلفي (Backpropagation):** حساب التدرجات (Gradients) لجميع الأوزان والانحيازات باستخدام قاعدة السلسلة.
+- **المُحسِّنات (Optimizers):** قمت بتطبيق خوارزميتين لتحديث الأوزان:
+  - `SGD`: التدرج العشوائي البسيط.
+  - `Adam`: خوارزمية أكثر تطوراً وفعالية.
+- **حلقة التدريب (Training Loop):** سكربت كامل لتدريب الشبكة على مجموعة بيانات MNIST، مع تقسيم البيانات إلى دفعات (mini-batches) وحساب الدقة.
+
+---
+
+## هيكلية المشروع
+
+المشروع مقسم إلى 4 ملفات رئيسية، كل منها له وظيفة محددة:
+
+- **`layers.py`**: يحتوي على "قطع الليغو" للمشروع. كل كلاس في هذا الملف يمثل طبقة (مثل `Relu` أو `Affine`) ويحتوي على دالتي `forward` و `backward` الأساسيتين.
+
+- **`network.py`**: هنا قمت بتعريف كلاس `TwoLayerNet` الذي يجمع الطبقات من `layers.py` لبناء الهيكل الكامل للشبكة العصبونية.
+
+- **`optimizer.py`**: يحتوي على "محركات" التعلم. قمت بتطبيق `SGD` و `Adam` هنا، وهي المسؤولة عن تحديث أوزان الشبكة بناءً على التدرجات المحسوبة.
+
+- **`train.py`**: هذا هو السكربت الرئيسي الذي يقوم بتشغيل كل شيء. يقوم بتحميل بيانات MNIST، وإنشاء كائن من الشبكة والمُحسِّن، ثم يبدأ حلقة التدريب والتقييم.
+
+---
+
+## كيفية تشغيل المشروع وتجربة النماذج
+
+الأمر بسيط جداً، وقد صممت الكود ليكون سهل الاستخدام والتجربة.
+
+#### 1. تثبيت المكتبات المطلوبة:
+
+كل ما تحتاجه هو `numpy` و `scikit-learn`. يمكنك تثبيتها بالأمر التالي:
+
+```bash
+pip install numpy scikit-learn
+```
+
+#### 2. تشغيل التدريب:
+
+لتشغيل عملية التدريب، فقط قم بتنفيذ الملف الرئيسي:
+
+```bash
+python train.py
+```
+
+#### 3. **تجربة النماذج المختلفة (الجزء الممتع!):**
+
+لتسهيل المقارنة، أضفت "لوحة تحكم" بسيطة في أعلى ملف `train.py`. يمكنك من خلالها التبديل بين النموذج الأساسي والنموذج المحسن.
+
+- **لتشغيل النموذج الأساسي (SGD):**
+
+  ```python
+  CHOSEN_OPTIMIZER = 'sgd'
+  USE_HE_INIT = False
+  L2_PENALTY = 0
+  ```
+
+- **لتشغيل النموذج المحسن (Adam + He + L2):**
+  ```python
+  CHOSEN_OPTIMIZER = 'adam'
+  USE_HE_INIT = True
+  L2_PENALTY = 1e-4  # قيمة صغيرة لمنع الإفراط في التعلم
+  ```
+
+---
+
+## رحلة التطوير والنتائج التي توصلت إليها
+
+بدأت ببناء نموذج أساسي باستخدام الممارسات القياسية: مُحسِّن `SGD` بسيط وتهيئة أوزان عادية. هذا النموذج عمل بشكل جيد وأعطى دقة ممتازة بلغت حوالي **97.1%** على مجموعة اختبار MNIST.
+
+بعد ذلك، قررت أن أطور النموذج وأرى ما إذا كان بإمكاني تحسين الأداء. قمت بتطبيق ثلاث تقنيات متقدمة:
+
+1.  **مُحسِّن Adam:** كبديل أذكى لـ `SGD`.
+2.  **تهيئة He:** وهي طريقة أفضل لتهيئة الأوزان الأولية للشبكات التي تستخدم `ReLU`.
+3.  **تنظيم L2 (Weight Decay):** للمساعدة في منع "الإفراط في التعلم".
+
+عندما قارنت النتائج، لاحظت فرقين رئيسيين:
+
+- **سرعة تعلم أعلى:** النموذج الذي يستخدم `Adam` وصل إلى مستويات دقة عالية (مثل 95%) **بشكل أسرع بكثير** من نموذج `SGD`.
+- **أداء نهائي أفضل قليلاً:** الدقة النهائية على بيانات الاختبار ارتفعت بشكل طفيف إلى حوالي **97.3%**، مما يثبت أن هذه التحسينات لها تأثير عملي.
+
+كانت هذه التجربة مفيدة جداً، حيث أظهرت لي أن هذه التقنيات المتقدمة ليست مجرد مفاهيم نظرية، بل لها تأثير حقيقي وملموس على كفاءة وأداء الشبكات العصبونية.
+
+================================================================================
+
+
+================================================================================
+FILE: train.py
+================================================================================
+
+FILE INFORMATION:
+----------------------------------------
+Size: 2.36 KB
+Extension: .py
+Language: python
+Location: train.py
+Relative Path: root
+Created: 2025-12-27 18:21:11 (Asia/Damascus / GMT+03:00)
+Modified: 2026-01-01 20:39:18 (Asia/Damascus / GMT+03:00)
+MD5: 0415dfd7e86d10c1440e5aa925ebf66b
+SHA256: 30ac644da9989c804dc522b8d0e57b74c52829fa51dac2481c5023f6f0cab3c6
+Encoding: ASCII
+
+FILE CONTENT:
+----------------------------------------
+import numpy as np
+from sklearn.datasets import fetch_openml
+from sklearn.preprocessing import OneHotEncoder
+from network import TwoLayerNet
+from optimizer import SGD, Adam
+
+CHOSEN_OPTIMIZER = 'sgd'     # sgd or adam
+USE_HE_INIT = False            # True or False
+L2_PENALTY = 0             # 0 or 1e-4
+
+
+np.random.seed(42) 
+
+
+print("Data loading MNIST " )
+X_data,y_data= fetch_openml('mnist_784',version=1,return_X_y=True,as_frame=False)
+X_data= X_data/ 255.0
+y_data_labels= y_data.astype(np.uint8)
+encoder= OneHotEncoder(sparse_output=False)
+y_data_onehot= encoder.fit_transform(y_data_labels.reshape(-1, 1))
+X_train,X_test= X_data[:60000],X_data[60000:]
+y_train, y_test= y_data_onehot[:60000],y_data_onehot[60000:]
+y_train_labels,y_test_labels= y_data_labels[:60000],y_data_labels[60000:]
+
+print("The data was uploaded successfully")
+
+
+total_training_steps=10000
+training_data_size =X_train.shape[0]
+batch_size= 100
+
+print("\nNetwork settings")
+print(f"engine (Optimizer): {CHOSEN_OPTIMIZER}")
+print(f"Using the configuration He: {USE_HE_INIT}")
+print(f"Penalty L2: {L2_PENALTY}")
+print("\n")
+
+network= TwoLayerNet(input_size=784,hidden_size=50,output_size=10,weight_init_type='he' if USE_HE_INIT else 'std',l2_penalty=L2_PENALTY)
+
+if CHOSEN_OPTIMIZER.lower() == 'adam':
+    optimizer= Adam(learning_rate=0.001)
+else:
+    optimizer= SGD(learning_rate=0.1)
+
+print("Start of training session\n")
+
+for step in range(total_training_steps):
+    random_indices= np.random.choice(training_data_size,batch_size)
+    input_batch= X_train[random_indices]
+    target_batch= y_train[random_indices]   
+    gradients= network.calculate_gradients(input_batch,target_batch)
+    optimizer.apply_updates(network.network_params,gradients)
+    
+    if step % 100 == 0:
+        current_loss= network.calculate_loss(input_batch,target_batch)
+        accuracy_on_train= network.calculate_accuracy(X_train,y_train_labels)
+        accuracy_on_test= network.calculate_accuracy(X_test,y_test_labels)
+        
+        print(f"the step {step}/ {total_training_steps} | the error: {current_loss:.4f} | Training accuracy : {accuracy_on_train:.4f} | Test accuracy: {accuracy_on_test:.4f}")
+
+print("\n Training End" )
+
+final_accuracy= network.calculate_accuracy(X_test,y_test_labels)
+print("=" * 40)
+print(f"Final accuracy on test data: {final_accuracy:.4f}")
+print("=" * 40)
+
+================================================================================

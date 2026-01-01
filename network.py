@@ -1,103 +1,74 @@
 import numpy as np
 from collections import OrderedDict
-from layers import Affine, Relu, SoftmaxWithLoss
+from layers import Affine,Relu,SoftMaxWithLoss
 
 class TwoLayerNet:
-    
-    # A simple two-layer neural network.
-    # Architecture: Affine -> ReLU -> Affine -> Softmax
-    
-    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01, weight_init_type='std', weight_decay_lambda=0):
-    
-        # Initializes the network.
-        # input_size: حجم المدخلات (مثلاً 784 لصورة 28x28)
-        # hidden_size: عدد العصبونات في الطبقة المخفية
-        # output_size: عدد المخرجات (مثلاً 10 للأرقام من 0-9)
-    
-        
-        # 1. تهيئة الأوزان والانحيازات (Parameters)
-        self.params = {}
-        self.params['W1'] = weight_init_std * np.random.randn(input_size, hidden_size)
-        self.params['b1'] = np.zeros(hidden_size)
-        self.params['W2'] = weight_init_std * np.random.randn(hidden_size, output_size)
-        self.params['b2'] = np.zeros(output_size)
+    def __init__(self,input_size,hidden_size,output_size,weight_init_type= 'std',l2_penalty= 0):
+        self.network_params = {}
+        init_type= weight_init_type.lower()
 
-        # 2. بناء الطبقات بالترتيب
-        # نستخدم OrderedDict لضمان الحفاظ على ترتيب الطبقات
-        self.layers = OrderedDict()
-        self.layers['Affine1'] = Affine(self.params['W1'], self.params['b1'])
-        self.layers['Relu1'] = Relu()
-        self.layers['Affine2'] = Affine(self.params['W2'], self.params['b2'])
-        
-        # الطبقة الأخيرة منفصلة لأنها تتعامل مع حساب الخسارة
-        self.lastLayer = SoftmaxWithLoss()
-         # تخزين معامل weight decay
-        self.weight_decay_lambda = weight_decay_lambda
-        
-    def predict(self, x):
-    
-        # Performs prediction (forward pass without loss calculation).
-    
-        # تمرير المدخلات عبر كل طبقة بالترتيب
-        for layer in self.layers.values():
-            x = layer.forward(x)
-        
-        return x
+        if init_type== 'he':
+            scale1= np.sqrt(2.0/ input_size)
+            scale2= np.sqrt(2.0/ hidden_size)
+        else:
+            scale1= 0.01
+            scale2= 0.01
 
-    def loss(self, x, t):
+        self.network_params['W1']= scale1 * np.random.randn(input_size,hidden_size)
+        self.network_params['b1']= np.zeros(hidden_size)
+        self.network_params['W2']= scale2 * np.random.randn(hidden_size,output_size)
+        self.network_params['b2']= np.zeros(output_size)
+
+        self.layer_stack= OrderedDict()
+        self.layer_stack['Affine1']= Affine(self.network_params['W1'],self.network_params['b1'])
+        self.layer_stack['Relu1']= Relu()
+        self.layer_stack['Affine2']= Affine(self.network_params['W2'],self.network_params['b2'])
+
+        self.final_loss_layer= SoftMaxWithLoss()
+        self.l2_penalty_strength= l2_penalty
+
+    def predict(self,input_data):
+        current_data= input_data
+        for layer in self.layer_stack.values():
+            current_data= layer.forward(current_data)
+            
+        return current_data
+        
+    def calculate_loss(self,input_data,target_labels):
+        prediction_output = self.predict(input_data)
+        l2_penalty_value= 0
+
+        if self.l2_penalty_strength >0:
+            w1_penalty= 0.5 * self.l2_penalty_strength * np.sum(self.network_params['W1']**2)
+            w2_penalty= 0.5 * self.l2_penalty_strength * np.sum(self.network_params['W2']**2)
+            l2_penalty_value= w1_penalty+ w2_penalty
+
+        return self.final_loss_layer.forward(prediction_output,target_labels) + l2_penalty_value
     
-        # Calculates the loss.
-        # x: input data
-        # t: target labels
-        
-        # نقوم أولاً بالتنبؤ
-        y = self.predict(x)
-        # حساب عقوبة الأوزان (L2 norm)
-        weight_decay = 0
-        weight_decay += 0.5 * self.weight_decay_lambda * np.sum(self.params['W1'] ** 2)
-        weight_decay += 0.5 * self.weight_decay_lambda * np.sum(self.params['W2'] ** 2)
+    def calculate_accuracy(self,input_data,target_labels):
+        predicted_scores= self.predict(input_data)
+        predicted_classes= np.argmax(predicted_scores,axis=1)
 
-        # ثم نحسب الخسارة باستخدام الطبقة الأخيرة مع إضافة العقوبة
-        return self.lastLayer.forward(y, t) + weight_decay
+        if target_labels.ndim !=1:
+            target_labels =  np.argmax(target_labels,axis=1)
 
-    def accuracy(self, x, t):
-        
-        # Calculates the accuracy.
-        
-        y = self.predict(x)
-        y = np.argmax(y, axis=1)
-        if t.ndim != 1: 
-            t = np.argmax(t, axis=1)
-        
-        accuracy = np.sum(y == t) / float(x.shape[0])
+        accuracy= np.sum(predicted_classes== target_labels)/ float(input_data.shape[0])
+
         return accuracy
-
-    def gradient(self, x, t):
-        
-        # Calculates gradients for all weights and biases using backpropagation.
-        
-        # 1. الانتشار الأمامي (Forward pass)
-        self.loss(x, t)
-
-        # 2. الانتشار الخلفي (Backward pass)
-        dout = 1
-        # نبدأ من الطبقة الأخيرة
-        dout = self.lastLayer.backward(dout)
-        
-        # نعكس ترتيب الطبقات للانتشار الخلفي
-        layers = list(self.layers.values())
+    
+    def calculate_gradients(self,input_data,target_labels):
+        self.calculate_loss(input_data,target_labels)
+        current_grad= self.final_loss_layer.backward(1)
+        layers= list(self.layer_stack.values())
         layers.reverse()
-        
-        # نمرر "اللوم" (dout) عبر كل طبقة بالعكس
+
         for layer in layers:
-            dout = layer.backward(dout)
+            current_grad= layer.backward(current_grad)
 
-         # 3. تجميع التدرجات وإضافة تدرج عقوبة L2
-        grads = {}
-        # نضيف تدرج العقوبة (lambda * W) إلى تدرج الوزن المحسوب
-        grads['W1'] = self.layers['Affine1'].dW + self.weight_decay_lambda * self.params['W1']
-        grads['b1'] = self.layers['Affine1'].db
-        grads['W2'] = self.layers['Affine2'].dW + self.weight_decay_lambda * self.params['W2']
-        grads['b2'] = self.layers['Affine2'].db
+        final_gradients= {}
+        final_gradients['W1']= self.layer_stack['Affine1'].grad_w + self.l2_penalty_strength* self.network_params['W1']
+        final_gradients['b1']= self.layer_stack['Affine1'].grad_b
+        final_gradients['W2']= self.layer_stack['Affine2'].grad_w + self.l2_penalty_strength* self.network_params['W2']
+        final_gradients['b2']= self.layer_stack['Affine2'].grad_b
 
-        return grads
+        return final_gradients

@@ -4,88 +4,63 @@ from sklearn.preprocessing import OneHotEncoder
 from network import TwoLayerNet
 from optimizer import SGD, Adam
 
-# ======================================================================
-# لوحة التحكم بالتجربة (Experiment Control Panel)
-# ======================================================================
-optimizer_choice = 'sgd'  # 'sgd' or 'adam'
-use_he_initialization = False  # True or False
-weight_decay_lambda = 0  # 0 for no decay, 1e-4 for small decay)
-# ======================================================================
+CHOSEN_OPTIMIZER = 'sgd'     # sgd or adam
+USE_HE_INIT = False            # True or False
+L2_PENALTY = 0             # 0 or 1e-4
 
-# 1. تحميل ومعالجة البيانات (MNIST)
-print("Loading dataset...")
-# جلب البيانات
-X, y = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False)
 
-# تطبيع قيم البكسلات لتكون بين 0 و 1
-X = X / 255.0
+np.random.seed(42) 
 
-# تحويل التسميات (y) من نص إلى أرقام
-y = y.astype(np.uint8)
 
-# تحويل التسميات إلى صيغة "one-hot"
-# مثال: الرقم 2 -> [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
-enc = OneHotEncoder(sparse_output=False, categories='auto')
-y_one_hot = enc.fit_transform(y[:, np.newaxis])
+print("Data loading MNIST " )
+X_data,y_data= fetch_openml('mnist_784',version=1,return_X_y=True,as_frame=False)
+X_data= X_data/ 255.0
+y_data_labels= y_data.astype(np.uint8)
+encoder= OneHotEncoder(sparse_output=False)
+y_data_onehot= encoder.fit_transform(y_data_labels.reshape(-1, 1))
+X_train,X_test= X_data[:60000],X_data[60000:]
+y_train, y_test= y_data_onehot[:60000],y_data_onehot[60000:]
+y_train_labels,y_test_labels= y_data_labels[:60000],y_data_labels[60000:]
 
-# تقسيم البيانات إلى مجموعة تدريب ومجموعة اختبار
-X_train, X_test = X[:60000], X[60000:]
-y_train, y_test = y_one_hot[:60000], y_one_hot[60000:]
-y_train_labels, y_test_labels = y[:60000], y[60000:] # للاستخدام في حساب الدقة
+print("The data was uploaded successfully")
 
-print("Dataset loaded and preprocessed.")
 
-# 2. تعريف المعلمات الفائقة (Hyperparameters)
-iters_num = 10000       # عدد مرات تكرار التدريب
-train_size = X_train.shape[0]
-batch_size = 100        # حجم الدفعة الصغيرة في كل مرة تدريب
-learning_rate = 0.1     # معدل التعلم
+total_training_steps=10000
+training_data_size =X_train.shape[0]
+batch_size= 100
 
-# 3. تهيئة الشبكة والمحسن
-print("Initializing network with the following settings:")
-print(f"Optimizer: {optimizer_choice}, He Init: {use_he_initialization}, L2 Lambda: {weight_decay_lambda}")
+print("\nNetwork settings")
+print(f"engine (Optimizer): {CHOSEN_OPTIMIZER}")
+print(f"Using the configuration He: {USE_HE_INIT}")
+print(f"Penalty L2: {L2_PENALTY}")
+print("\n")
 
-network = TwoLayerNet(input_size=784, hidden_size=50, output_size=10,
-                      weight_init_type='he' if use_he_initialization else 'std',
-                      weight_decay_lambda=weight_decay_lambda)
+network= TwoLayerNet(input_size=784,hidden_size=50,output_size=10,weight_init_type='he' if USE_HE_INIT else 'std',l2_penalty=L2_PENALTY)
 
-if optimizer_choice.lower() == 'adam':
-    optimizer = Adam(lr=0.001) # Adam يعمل أفضل مع معدل تعلم أصغر
+if CHOSEN_OPTIMIZER.lower() == 'adam':
+    optimizer= Adam(learning_rate=0.001)
 else:
-    optimizer = SGD(lr=0.1)
+    optimizer= SGD(learning_rate=0.1)
 
-print("Starting training...")
+print("Start of training session\n")
 
-# 4. حلقة التدريب الرئيسية
-for i in range(iters_num):
-    # أ. اختيار دفعة صغيرة عشوائية (mini-batch)
-    batch_mask = np.random.choice(train_size, batch_size)
-    x_batch = X_train[batch_mask]
-    t_batch = y_train[batch_mask]
+for step in range(total_training_steps):
+    random_indices= np.random.choice(training_data_size,batch_size)
+    input_batch= X_train[random_indices]
+    target_batch= y_train[random_indices]   
+    gradients= network.calculate_gradients(input_batch,target_batch)
+    optimizer.apply_updates(network.network_params,gradients)
     
-    # ب. حساب التدرجات (الانتشار الأمامي والخلفي)
-    grads = network.gradient(x_batch, t_batch)
-    
-    # ج. تحديث الأوزان
-    optimizer.update(network.params, grads)
-    
-    # كل 100 خطوة، اطبع حالة التدريب
-    if i % 100 == 0:
-        # حساب الخسارة والدقة على مجموعة التدريب والاختبار
-        train_loss = network.loss(x_batch, t_batch)
+    if step % 100 == 0:
+        current_loss= network.calculate_loss(input_batch,target_batch)
+        accuracy_on_train= network.calculate_accuracy(X_train,y_train_labels)
+        accuracy_on_test= network.calculate_accuracy(X_test,y_test_labels)
         
-        # حساب الدقة
-        train_acc = network.accuracy(X_train, y_train)
-        test_acc = network.accuracy(X_test, y_test)
-        
-        print(f"Iteration {i}: Train Loss = {train_loss:.4f}, Train Acc = {train_acc:.4f}, Test Acc = {test_acc:.4f}")
+        print(f"the step {step}/ {total_training_steps} | the error: {current_loss:.4f} | Training accuracy : {accuracy_on_train:.4f} | Test accuracy: {accuracy_on_test:.4f}")
 
-print("Training finished.")
+print("\n Training End" )
 
-# 5. تقييم نهائي
-final_train_acc = network.accuracy(X_train, y_train)
-final_test_acc = network.accuracy(X_test, y_test)
-print("="*30)
-print(f"Final Training Accuracy: {final_train_acc:.4f}")
-print(f"Final Test Accuracy: {final_test_acc:.4f}")
-
+final_accuracy= network.calculate_accuracy(X_test,y_test_labels)
+print("=" * 40)
+print(f"Final accuracy on test data: {final_accuracy:.4f}")
+print("=" * 40)
